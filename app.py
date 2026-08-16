@@ -6,6 +6,7 @@ from wordcloud import WordCloud
 from collections import Counter
 import re
 
+
 # ==========================================================
 # KONFIGURASI HALAMAN
 # ==========================================================
@@ -15,6 +16,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded"
 )
+
 
 # ==========================================================
 # CSS CUSTOM
@@ -65,18 +67,91 @@ st.markdown(
     unsafe_allow_html=True
 )
 
+
 # ==========================================================
 # LOAD DATA
 # ==========================================================
 @st.cache_data
 def load_data():
+
     df = pd.read_csv("seabank_reviews.csv")
 
-    # Membersihkan nama kolom
-    df.columns = [c.lower().strip() for c in df.columns]
+    # ------------------------------------------------------
+    # BERSIHKAN NAMA KOLOM
+    # ------------------------------------------------------
+    df.columns = (
+        df.columns
+        .astype(str)
+        .str.strip()
+        .str.lower()
+    )
 
-    # Normalisasi label sentimen
+    # ------------------------------------------------------
+    # NORMALISASI KOLOM TANGGAL
+    # ------------------------------------------------------
+    date_candidates = [
+        "tanggal",
+        "date",
+        "datetime",
+        "review_date",
+        "review_date_time",
+        "at"
+    ]
+
+    date_column = next(
+        (
+            col
+            for col in date_candidates
+            if col in df.columns
+        ),
+        None
+    )
+
+    if date_column is not None and date_column != "tanggal":
+
+        df.rename(
+            columns={
+                date_column: "tanggal"
+            },
+            inplace=True
+        )
+
+    # ------------------------------------------------------
+    # NORMALISASI KOLOM SENTIMEN
+    # ------------------------------------------------------
+    sentiment_candidates = [
+        "sentiment",
+        "sentimen",
+        "label",
+        "class"
+    ]
+
+    sentiment_column = next(
+        (
+            col
+            for col in sentiment_candidates
+            if col in df.columns
+        ),
+        None
+    )
+
+    if (
+        sentiment_column is not None
+        and sentiment_column != "sentiment"
+    ):
+
+        df.rename(
+            columns={
+                sentiment_column: "sentiment"
+            },
+            inplace=True
+        )
+
+    # ------------------------------------------------------
+    # NORMALISASI LABEL SENTIMEN
+    # ------------------------------------------------------
     if "sentiment" in df.columns:
+
         df["sentiment"] = (
             df["sentiment"]
             .astype(str)
@@ -89,15 +164,21 @@ def load_data():
             })
         )
 
-    # Konversi tanggal
+    # ------------------------------------------------------
+    # KONVERSI TANGGAL
+    # ------------------------------------------------------
     if "tanggal" in df.columns:
+
         df["tanggal"] = pd.to_datetime(
             df["tanggal"],
             errors="coerce"
         )
 
-    # Konversi rating
+    # ------------------------------------------------------
+    # KONVERSI RATING
+    # ------------------------------------------------------
     if "rating" in df.columns:
+
         df["rating"] = pd.to_numeric(
             df["rating"],
             errors="coerce"
@@ -106,15 +187,52 @@ def load_data():
     return df
 
 
+# Jalankan load data
 df = load_data()
+
+
+# ==========================================================
+# VALIDASI DATA
+# ==========================================================
+required_columns = [
+    "sentiment",
+    "rating",
+    "review"
+]
+
+missing_columns = [
+    col
+    for col in required_columns
+    if col not in df.columns
+]
+
+if missing_columns:
+
+    st.error(
+        "Dataset tidak memiliki kolom yang diperlukan: "
+        + ", ".join(missing_columns)
+    )
+
+    st.write(
+        "Kolom yang ditemukan:",
+        list(df.columns)
+    )
+
+    st.stop()
+
 
 # ==========================================================
 # SIDEBAR
 # ==========================================================
 st.sidebar.title("⚙️ Filter Dashboard")
 
+# ----------------------------------------------------------
+# FILTER SENTIMEN
+# ----------------------------------------------------------
 sentiment_options = sorted(
-    df["sentiment"].dropna().unique()
+    df["sentiment"]
+    .dropna()
+    .unique()
 )
 
 selected_sentiment = st.sidebar.multiselect(
@@ -124,17 +242,27 @@ selected_sentiment = st.sidebar.multiselect(
 )
 
 filtered = df[
-    df["sentiment"].isin(selected_sentiment)
+    df["sentiment"].isin(
+        selected_sentiment
+    )
 ].copy()
 
-# Filter rating
+
+# ----------------------------------------------------------
+# FILTER RATING
+# ----------------------------------------------------------
 if (
     "rating" in filtered.columns
     and filtered["rating"].notna().any()
 ):
 
-    rating_min = int(filtered["rating"].min())
-    rating_max = int(filtered["rating"].max())
+    rating_min = int(
+        filtered["rating"].min()
+    )
+
+    rating_max = int(
+        filtered["rating"].max()
+    )
 
     selected_rating = st.sidebar.slider(
         "Filter Rating",
@@ -144,9 +272,17 @@ if (
     )
 
     filtered = filtered[
-        (filtered["rating"] >= selected_rating[0])
-        & (filtered["rating"] <= selected_rating[1])
+        (
+            filtered["rating"]
+            >= selected_rating[0]
+        )
+        &
+        (
+            filtered["rating"]
+            <= selected_rating[1]
+        )
     ]
+
 
 # ==========================================================
 # HEADER
@@ -163,6 +299,7 @@ st.markdown(
     pengalaman pengguna berdasarkan data ulasan yang telah diproses.
     """
 )
+
 
 # ==========================================================
 # KPI
@@ -181,13 +318,20 @@ neutral = (
     filtered["sentiment"] == "netral"
 ).sum()
 
+
 if (
     "rating" in filtered.columns
     and filtered["rating"].notna().any()
 ):
-    avg_rating = filtered["rating"].mean()
+
+    avg_rating = (
+        filtered["rating"].mean()
+    )
+
 else:
+
     avg_rating = 0
+
 
 k1, k2, k3, k4 = st.columns(4)
 
@@ -213,14 +357,16 @@ k4.metric(
 
 st.markdown("---")
 
+
 # ==========================================================
 # DISTRIBUSI SENTIMEN & RATING
 # ==========================================================
 c1, c2 = st.columns(2)
 
-# ----------------------------------------------------------
+
+# ==========================================================
 # DISTRIBUSI SENTIMEN
-# ----------------------------------------------------------
+# ==========================================================
 with c1:
 
     st.markdown(
@@ -267,9 +413,10 @@ with c1:
         use_container_width=True
     )
 
-# ----------------------------------------------------------
+
+# ==========================================================
 # DISTRIBUSI RATING
-# ----------------------------------------------------------
+# ==========================================================
 with c2:
 
     st.markdown(
@@ -313,76 +460,108 @@ with c2:
         use_container_width=True
     )
 
+
 st.markdown("---")
+
 
 # ==========================================================
 # TREN JUMLAH ULASAN HARIAN
 # ==========================================================
 st.markdown(
-    '<div class="section-title">Tren Jumlah Ulasan Harian Berdasarkan Sentimen</div>',
+    '<div class="section-title">'
+    'Tren Jumlah Ulasan Harian Berdasarkan Sentimen'
+    '</div>',
     unsafe_allow_html=True
 )
 
-# Pastikan tanggal valid
-trend_data = filtered.dropna(
-    subset=["tanggal", "sentiment"]
-).copy()
 
-trend = (
-    trend_data
-    .groupby(
-        [
-            trend_data["tanggal"].dt.date,
+# Pastikan kolom tanggal tersedia
+if "tanggal" in filtered.columns:
+
+    trend_data = filtered.dropna(
+        subset=[
+            "tanggal",
             "sentiment"
         ]
+    ).copy()
+
+    if not trend_data.empty:
+
+        trend = (
+            trend_data
+            .groupby(
+                [
+                    trend_data["tanggal"].dt.date,
+                    "sentiment"
+                ]
+            )
+            .size()
+            .reset_index(
+                name="Jumlah"
+            )
+        )
+
+        trend.columns = [
+            "Tanggal",
+            "Sentimen",
+            "Jumlah"
+        ]
+
+        fig_line = px.line(
+            trend,
+            x="Tanggal",
+            y="Jumlah",
+            color="Sentimen",
+            color_discrete_map={
+                "positif": "#2563EB",
+                "negatif": "#DC2626",
+                "netral": "#F59E0B"
+            }
+        )
+
+        fig_line.update_traces(
+            mode="lines",
+            line=dict(
+                width=3
+            )
+        )
+
+        fig_line.update_layout(
+            xaxis_title="Tanggal",
+            yaxis_title="Jumlah Ulasan",
+            hovermode="x unified",
+            legend_title="Sentimen",
+            height=450,
+            margin=dict(
+                l=10,
+                r=10,
+                t=10,
+                b=10
+            )
+        )
+
+        st.plotly_chart(
+            fig_line,
+            use_container_width=True
+        )
+
+    else:
+
+        st.info(
+            "Tidak terdapat data tanggal yang valid "
+            "untuk ditampilkan."
+        )
+
+else:
+
+    st.warning(
+        "Kolom 'tanggal' tidak ditemukan pada dataset. "
+        "Tren harian tidak dapat ditampilkan."
     )
-    .size()
-    .reset_index(name="Jumlah")
-)
 
-trend.columns = [
-    "Tanggal",
-    "Sentimen",
-    "Jumlah"
-]
-
-fig_line = px.line(
-    trend,
-    x="Tanggal",
-    y="Jumlah",
-    color="Sentimen",
-    color_discrete_map={
-        "positif": "#2563EB",
-        "negatif": "#DC2626",
-        "netral": "#F59E0B"
-    }
-)
-
-fig_line.update_traces(
-    mode="lines",
-    line=dict(width=3)
-)
-
-fig_line.update_layout(
-    xaxis_title="Tanggal",
-    yaxis_title="Jumlah Ulasan",
-    hovermode="x unified",
-    legend_title="Sentimen",
-    height=450,
-    margin=dict(
-        l=10,
-        r=10,
-        t=10,
-        b=10
-    )
-)
-
-st.plotly_chart(
-    fig_line,
-    use_container_width=True
-)
 
 st.markdown("---")
+
 
 # ==========================================================
 # WORD CLOUD
@@ -395,9 +574,16 @@ st.markdown(
 wc1, wc2 = st.columns(2)
 
 
-def make_wordcloud(text, cmap):
+# ==========================================================
+# FUNGSI WORD CLOUD
+# ==========================================================
+def make_wordcloud(
+    text,
+    cmap
+):
 
     if not text.strip():
+
         return None
 
     wc = WordCloud(
@@ -424,21 +610,21 @@ def make_wordcloud(text, cmap):
     return fig
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # WORD CLOUD POSITIF
-# ----------------------------------------------------------
+# ==========================================================
 with wc1:
 
     st.subheader(
         "Word Cloud Positif"
     )
 
+    positive_reviews = filtered[
+        filtered["sentiment"] == "positif"
+    ]["review"].dropna().astype(str)
+
     pos_text = " ".join(
-        filtered[
-            filtered["sentiment"] == "positif"
-        ]["review"]
-        .dropna()
-        .astype(str)
+        positive_reviews
     )
 
     fig = make_wordcloud(
@@ -446,7 +632,8 @@ with wc1:
         "Blues"
     )
 
-    if fig:
+    if fig is not None:
+
         st.pyplot(
             fig,
             use_container_width=True
@@ -455,26 +642,27 @@ with wc1:
         plt.close(fig)
 
     else:
+
         st.info(
             "Tidak terdapat ulasan positif."
         )
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # WORD CLOUD NEGATIF
-# ----------------------------------------------------------
+# ==========================================================
 with wc2:
 
     st.subheader(
         "Word Cloud Negatif"
     )
 
+    negative_reviews = filtered[
+        filtered["sentiment"] == "negatif"
+    ]["review"].dropna().astype(str)
+
     neg_text = " ".join(
-        filtered[
-            filtered["sentiment"] == "negatif"
-        ]["review"]
-        .dropna()
-        .astype(str)
+        negative_reviews
     )
 
     fig = make_wordcloud(
@@ -482,7 +670,8 @@ with wc2:
         "Reds"
     )
 
-    if fig:
+    if fig is not None:
+
         st.pyplot(
             fig,
             use_container_width=True
@@ -491,22 +680,33 @@ with wc2:
         plt.close(fig)
 
     else:
+
         st.info(
             "Tidak terdapat ulasan negatif."
         )
 
+
 st.markdown("---")
+
 
 # ==========================================================
 # TOP KATA
 # ==========================================================
 st.markdown(
-    '<div class="section-title">10 Kata yang Paling Sering Muncul</div>',
+    '<div class="section-title">'
+    '10 Kata yang Paling Sering Muncul'
+    '</div>',
     unsafe_allow_html=True
 )
 
 
-def top_words(texts, n=10):
+# ==========================================================
+# FUNGSI TOP WORDS
+# ==========================================================
+def top_words(
+    texts,
+    n=10
+):
 
     text = " ".join(
         texts
@@ -545,9 +745,10 @@ def top_words(texts, n=10):
     }
 
     words = [
-        w for w in words
-        if len(w) > 2
-        and w not in stopwords
+        word
+        for word in words
+        if len(word) > 2
+        and word not in stopwords
     ]
 
     return Counter(
@@ -557,9 +758,10 @@ def top_words(texts, n=10):
 
 t1, t2 = st.columns(2)
 
-# ----------------------------------------------------------
+
+# ==========================================================
 # TOP KATA POSITIF
-# ----------------------------------------------------------
+# ==========================================================
 with t1:
 
     st.subheader(
@@ -587,9 +789,9 @@ with t1:
     )
 
 
-# ----------------------------------------------------------
+# ==========================================================
 # TOP KATA NEGATIF
-# ----------------------------------------------------------
+# ==========================================================
 with t2:
 
     st.subheader(
@@ -616,7 +818,9 @@ with t2:
         hide_index=True
     )
 
+
 st.markdown("---")
+
 
 # ==========================================================
 # DATA ULASAN
@@ -634,7 +838,8 @@ display_columns = [
 ]
 
 available_columns = [
-    col for col in display_columns
+    col
+    for col in display_columns
     if col in filtered.columns
 ]
 
@@ -647,6 +852,7 @@ st.dataframe(
     hide_index=True
 )
 
+
 # ==========================================================
 # FOOTER
 # ==========================================================
@@ -654,12 +860,12 @@ st.markdown("---")
 
 st.markdown(
     """
-    <div style='
+    <div style="
         text-align: center;
         color: #9CA3AF;
         font-size: 14px;
         padding: 10px 0;
-    '>
+    ">
         Dashboard Analisis Sentimen Ulasan SeaBank
         • © 2026 • @Agil Firli Gunawan
     </div>
