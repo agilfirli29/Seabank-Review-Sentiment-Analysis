@@ -4,19 +4,12 @@
 # =========================================
 
 import streamlit as st
-import numpy as np
 import pandas as pd
+import plotly.express as px
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+from collections import Counter
 import re
-import string
-import pickle
-
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-
-from nltk.corpus import stopwords
-from nltk.tokenize import word_tokenize
-
-from Sastrawi.Stemmer.StemmerFactory import StemmerFactory
 
 # =========================================
 # PAGE CONFIG
